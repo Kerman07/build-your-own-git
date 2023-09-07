@@ -1,31 +1,55 @@
 import sys
 import os
 import zlib
+import hashlib
 
 
-def main():
-    # You can use print statements as follows for debugging, they'll be visible when running tests.
-    # print("Logs from your program will appear here!")
-
-    # Uncomment this block to pass the first stage
-    command = sys.argv[1]
-    if command == "init":
+def initialize_git_directory():
+    if not os.path.exists(".git"):
         os.mkdir(".git")
         os.mkdir(".git/objects")
         os.mkdir(".git/refs")
         with open(".git/HEAD", "w") as f:
             f.write("ref: refs/heads/master\n")
         print("Initialized git directory")
-    elif command.startswith("cat-file"):
+    else:
+        print(".git directory already exists")
+
+
+def cat_file(hash):
+    directory, file = hash[:2], hash[2:]
+    with open(f".git/objects/{directory}/{file}", "rb") as f:
+        decompressed = zlib.decompress(f.read())
+        x = decompressed.find(b" ")
+        # fmt = decompressed[:x]
+        y = decompressed.find(b"\x00", x)
+        # size = int(decompressed[x:y].decode("ascii"))
+        print(decompressed[y + 1 :].decode("ascii"), end="")
+
+
+def hash_object(filename):
+    with open(filename, "rb") as f:
+        data = f.read()
+        result = b"blob " + str(len(data)).encode() + b"\x00" + data
+        file_hash = hashlib.sha1(result).hexdigest()
+        directory, file = file_hash[:2], file_hash[2:]
+        if not os.path.exists(f".git/objects/{directory}"):
+            os.mkdir(f".git/objects/{directory}")
+        with open(f".git/objects/{directory}/{file}", "wb") as nf:
+            nf.write(zlib.compress(result))
+    print(file_hash, end="")
+
+
+def main():
+    command = sys.argv[1]
+    if command == "init":
+        initialize_git_directory()
+    elif command == "cat-file":
         hash = sys.argv[3]
-        directory, file = hash[:2], hash[2:]
-        with open(f".git/objects/{directory}/{file}", "rb") as f:
-            decompressed = zlib.decompress(f.read())
-            x = decompressed.find(b" ")
-            # fmt = decompressed[:x]
-            y = decompressed.find(b"\x00", x)
-            # size = int(decompressed[x:y].decode("ascii"))
-            print(decompressed[y + 1 :].decode("ascii"), end="")
+        cat_file(hash)
+    elif command == "hash-object":
+        filename = sys.argv[3]
+        hash_object(filename)
     else:
         raise RuntimeError(f"Unknown command #{command}")
 
