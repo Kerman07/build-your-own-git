@@ -1,7 +1,8 @@
-import sys
-import os
-import zlib
 import hashlib
+import os
+import re
+import sys
+import zlib
 
 
 def initialize_git_directory():
@@ -40,18 +41,29 @@ def hash_object(filename):
     print(file_hash, end="")
 
 
+def ls_tree(hash):
+    directory, file = hash[:2], hash[2:]
+    with open(f".git/objects/{directory}/{file}", "rb") as f:
+        decompressed = zlib.decompress(f.read())
+        matches = re.findall(b" ([^\\x00]*)\\x00", decompressed)[1:]
+        print("\n".join(match.split(b" ")[-1].decode("ascii") for match in matches))
+
 def main():
     command = sys.argv[1]
-    if command == "init":
-        initialize_git_directory()
-    elif command == "cat-file":
-        hash = sys.argv[3]
-        cat_file(hash)
-    elif command == "hash-object":
-        filename = sys.argv[3]
-        hash_object(filename)
-    else:
-        raise RuntimeError(f"Unknown command #{command}")
+    match command:
+        case "init":
+            initialize_git_directory()
+        case "cat-file":
+            hash = sys.argv[3]
+            cat_file(hash)
+        case "hash-object":
+            filename = sys.argv[3]
+            hash_object(filename)
+        case "ls-tree":
+            hash = sys.argv[3]
+            ls_tree(hash)
+        case _:
+            raise RuntimeError(f"Unknown command #{command}")
 
 
 if __name__ == "__main__":
