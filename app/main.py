@@ -38,7 +38,7 @@ def hash_object(filename):
             os.mkdir(f".git/objects/{directory}")
         with open(f".git/objects/{directory}/{file}", "wb") as nf:
             nf.write(zlib.compress(result))
-    print(file_hash, end="")
+    return file_hash
 
 
 def ls_tree(hash):
@@ -47,6 +47,30 @@ def ls_tree(hash):
         decompressed = zlib.decompress(f.read())
         matches = re.findall(b" ([^\\x00]*)\\x00", decompressed)[1:]
         print("\n".join(match.split(b" ")[-1].decode("ascii") for match in matches))
+
+def write_tree(path):
+    if os.path.isfile(path):
+        return hash_object(path)
+    entries = sorted(os.listdir(path), key=lambda x: x if os.path.isfile(os.path.join(path, x)) else f"{x}/")
+    tree = b""
+    for entry in entries:
+        if entry == ".git":
+            continue
+        full_path = os.path.join(path, entry)
+        if os.path.isfile(full_path):
+            tree += f"100644 {entry}\0".encode()
+        else:
+            tree += f"40000 {entry}\0".encode()
+        hash = int.to_bytes(int(write_tree(full_path), base=16), length=20)
+        tree += hash
+    tree = f"tree {len(tree)}\0".encode() + tree
+    tree_hash = hashlib.sha1(tree).hexdigest()
+    directory, file = tree_hash[:2], tree_hash[2:]
+    if not os.path.exists(f".git/objects/{directory}"):
+        os.mkdir(f".git/objects/{directory}")
+    with open(f".git/objects/{directory}/{file}", "wb") as f:
+        f.write(zlib.compress(tree))
+    return tree_hash
 
 def main():
     command = sys.argv[1]
@@ -58,10 +82,12 @@ def main():
             cat_file(hash)
         case "hash-object":
             filename = sys.argv[3]
-            hash_object(filename)
+            print(hash_object(filename))
         case "ls-tree":
             hash = sys.argv[3]
             ls_tree(hash)
+        case "write-tree":
+            print(write_tree("."))
         case _:
             raise RuntimeError(f"Unknown command #{command}")
 
