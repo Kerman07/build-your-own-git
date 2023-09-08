@@ -1,3 +1,4 @@
+import time
 import hashlib
 import os
 import re
@@ -72,6 +73,24 @@ def write_tree(path):
         f.write(zlib.compress(tree))
     return tree_hash
 
+def commit_tree(tree_sha, parent_sha, message):
+    timestamp = int(time.time())
+    author = "Kerim Mandzo <kerman07@live.com>"
+    commit = f"tree {tree_sha}\n"
+    commit += f"parent {parent_sha}\n"
+    commit += f"author {author} {timestamp} -0500\n"
+    commit += f"committer {author} {timestamp} -0500\n\n"
+    commit += f"{message}\n"
+    commit = f"commit {len(commit)}\0".encode() + commit.encode()
+    commit_hash = hashlib.sha1(commit).hexdigest()
+    directory, file = commit_hash[:2], commit_hash[2:]
+    if not os.path.exists(f".git/objects/{directory}"):
+        os.mkdir(f".git/objects/{directory}")
+    with open(f".git/objects/{directory}/{file}", "wb") as f:
+        f.write(zlib.compress(commit))
+    return commit_hash
+    
+
 def main():
     command = sys.argv[1]
     match command:
@@ -88,6 +107,11 @@ def main():
             ls_tree(hash)
         case "write-tree":
             print(write_tree("."))
+        case "commit-tree":
+            tree_sha = sys.argv[2]
+            parent_sha = sys.argv[4]
+            msg = "".join(sys.argv[6:])
+            print(commit_tree(tree_sha, parent_sha, msg))
         case _:
             raise RuntimeError(f"Unknown command #{command}")
 
